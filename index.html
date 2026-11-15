@@ -18,12 +18,13 @@
 </header>
 
 <main id="main">
-  <p class="privacy-note" role="note">
-    <strong>Stored on this device only.</strong>
-    This static version saves lists in this browser (localStorage) and does
-    not sync across devices yet — sync is a later CloudKit / backend step.
-    No account, no ads, no analytics, no tracking.
+  <p class="privacy-note" role="note" id="privacyNote">
+    <strong>Synced across devices.</strong>
+    Lists live in Kevin's Firebase project (Google) — open the same link on
+    another device and reservations show up there too. No account needed:
+    you're signed in anonymously in the background. No ads, no analytics, no tracking.
   </p>
+  <p id="syncStatus" class="sync-status" role="status">Connecting…</p>
 
   <div class="view-switch" role="group" aria-label="View as">
     <span class="view-label" id="viewLabel">Viewing as:</span>
@@ -60,6 +61,7 @@
   <section id="view-list" class="view" aria-labelledby="listHeading" hidden>
     <h2 id="listHeading"></h2>
     <p id="listMeta" class="meta"></p>
+    <p id="editNote" class="hint" hidden></p>
     <div class="budget" aria-label="Budget progress">
       <div class="budget-row"><span id="budgetText"></span><span id="budgetPct"></span></div>
       <div class="budget-bar" role="progressbar" aria-label="Budget claimed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="budgetBar"><span id="budgetFill"></span></div>
@@ -170,6 +172,6 @@
   </footer>
 </main>
 
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

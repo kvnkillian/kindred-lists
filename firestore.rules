@@ -1,0 +1,157 @@
+/*
+ * Kindred Lists — Firestore security rules.
+ *
+ * HOW TO PUBLISH (do this once, in the Firebase console):
+ *   Firebase console > Build > Firestore Database > Rules tab >
+ *   paste this whole file > Publish.
+ *
+ * DO NOT leave the database in test mode (rules that allow read/write
+ * to anyone). These rules are the whole security model: the web-app
+ * config in app.js is public by design (it has to be — it ships in the
+ * public GitHub repo), and these rules are what keep claims secret.
+ *
+ * DATA MODEL (all under families/{familyId}):
+ *   lists/{listId}        — person, occasion, budget, isChild,
+ *                           managedBy, ownerUid (anonymous uid of the
+ *                           browser that created the list), ownerName
+ *   lists/{listId}/items/{itemId}
+ *                         — name, link, price, details, wanted,
+ *                           familyOnly, taken (boolean). NO claimer
+ *                           name on the item, ever.
+ *   claims/{itemId}      — itemId, listId, ownerUid, claimerUid,
+ *                           claimerName, bought. One claim per item;
+ *                           the doc id IS the item id, so two gifters
+ *                           cannot hold claims on the same item.
+ *   santa/draw            — participants, exclusions, lastYear, draw
+ *   meta/seed             — one-time marker that the demo lists were
+ *                           seeded (lets two first-loads race safely)
+ *
+ * HOW SECRET CLAIMS HOLD:
+ *   - Claim docs are readable ONLY by their claimer
+ *     (claimerUid == request.auth.uid). Nobody else — not the list
+ *     owner, not other gifters — can read claimerName, in the console
+ *     or through the API. The owner sees only item.taken = true and
+ *     the app renders "Reserved — name hidden".
+ *   - Gifters learn an item is taken from item.taken, never from a
+ *     claim doc.
+ *   - The client claims inside a Firestore transaction: it reads the
+ *     item, aborts if taken is already true, then writes the claim
+ *     and flips taken=true atomically. Two gifters racing the same
+ *     gift: one transaction wins, the other aborts and is told the
+ *     gift was just taken.
+ *
+ * KNOWN LIMITS (honest notes, not bugs):
+ *   - Item updates are owner-only EXCEPT flipping `taken` (and only
+ *     `taken`). That flip is what a claim does. A client that skips
+ *     the transaction could flip `taken` without writing a claim —
+ *     it can spoil availability, but it can never LEAK a name,
+ *     because names are not on items. Family-link trust model.
+ *   - get() vs getAfter() matters here (Firebase docs: get() sees a
+ *     document BEFORE the write, getAfter() sees it AFTER the atomic
+ *     operation). Item CREATES use getAfter() so the first-load seed
+ *     — one transaction that creates lists and their items together —
+ *     passes: the parent list does not exist yet in the pre-write
+ *     state. Item UPDATES and DELETES use get(), because the
+ *     delete-list batch deletes items and their parent list together
+ *     and the list must still be visible to the rule.
+ *   - Only the browser that created a list can edit/delete it
+ *     (ownerUid). A second parent on a different device cannot edit
+ *     the first parent's lists. If that becomes a problem, relax the
+ *     list/item rules to "any authenticated user in the family" —
+ *     claims stay secret either way.
+ *   - The Santa draw doc is readable by anyone with the family link;
+ *     tap-to-reveal is a UI courtesy. A determined snooper with the
+ *     link could read the draw in the console. True per-person
+ *     secrecy would need per-recipient encryption — out of scope.
+ *   - `meta/seed` can be created once and never changed: the demo
+ *     seed cannot be re-run by a client. Reset in the app deletes
+ *     and re-seeds lists directly instead.
+ */
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isListOwner(familyId, listId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/families/$(familyId)/lists/$(listId)).data.ownerUid == request.auth.uid;
+    }
+
+    // Same check, but against the document AFTER the atomic operation.
+    // Needed for item CREATES inside the seed transaction, where the
+    // parent list is created by the same transaction and get() would
+    // still see it as missing. For single writes the list is
+    // unchanged, so getAfter() and get() agree.
+    function isListOwnerAfter(familyId, listId) {
+      return signedIn()
+        && getAfter(/databases/$(database)/documents/families/$(familyId)/lists/$(listId)).data.ownerUid == request.auth.uid;
+    }
+
+    match /families/{familyId} {
+
+      /* ---- lists: anyone in the family can read; only the creator
+              (ownerUid) can create / edit / delete. ---- */
+      match /lists/{listId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.person is string
+          && request.resource.data.person.size() > 0;
+        allow update, delete: if signedIn()
+          && resource.data.ownerUid == request.auth.uid;
+
+        /* ---- items: anyone can read; owner edits; anyone may flip
+                ONLY the taken flag (that is what a claim does). ---- */
+        match /items/{itemId} {
+          allow read: if signedIn();
+          allow create: if isListOwnerAfter(familyId, listId)
+            && request.resource.data.name is string
+            && request.resource.data.name.size() > 0;
+          allow update: if signedIn() && (
+            isListOwner(familyId, listId)
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['taken'])
+              && request.resource.data.taken is bool)
+          );
+          allow delete: if isListOwner(familyId, listId);
+        }
+      }
+
+      /* ---- claims: the secret. Readable ONLY by the claimer. ---- */
+      match /claims/{claimId} {
+        allow read: if signedIn()
+          && resource.data.claimerUid == request.auth.uid;
+        allow create: if signedIn()
+          && request.resource.data.claimerUid == request.auth.uid
+          && request.resource.data.itemId == claimId
+          && request.resource.data.listId is string
+          && request.resource.data.ownerUid is string
+          && request.resource.data.claimerName is string
+          && request.resource.data.claimerName.size() > 0
+          && request.resource.data.bought is bool;
+        // Only the claimer, and only the bought flag may change.
+        allow update: if signedIn()
+          && resource.data.claimerUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['bought'])
+          && request.resource.data.bought is bool;
+        allow delete: if signedIn()
+          && resource.data.claimerUid == request.auth.uid;
+      }
+
+      /* ---- Secret Santa draw: shared by the family. ---- */
+      match /santa/{docId} {
+        allow read, write: if signedIn();
+      }
+
+      /* ---- Seed marker: created once, never changed. ---- */
+      match /meta/{docId} {
+        allow read: if signedIn();
+        allow create: if signedIn();
+        allow update, delete: if false;
+      }
+    }
+  }
+}

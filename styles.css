@@ -60,6 +60,13 @@ h3 { font-size: 1.15rem; margin: 0 0 10px; }
   padding: 12px 14px;
   margin: 0 0 16px;
 }
+.sync-status {
+  color: var(--ink-2);
+  font-size: .95rem;
+  margin: -8px 0 16px;
+}
+.sync-status[data-state="offline"], .sync-status[data-state="local"] { color: var(--amber); font-weight: 700; }
+.sync-status[data-state="synced"] { color: var(--pine); font-weight: 700; }
 .view-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 6px; }
 .view-label { font-weight: 700; }
 .view-switch button {

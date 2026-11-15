@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<meta name="description" content="Kindred Lists — one link, no account to view or claim, secret reservations so no duplicates, Secret Santa with exclusions, and budgets per person." />
+<title>Kindred Lists</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="app-header">
+  <button id="backBtn" class="back-btn" type="button" aria-label="Go back one screen" hidden>‹ Back</button>
+  <div class="brand">
+    <h1>Kindred Lists</h1>
+    <p class="tagline">One link. No duplicates. No surprise spoiled.</p>
+  </div>
+</header>
+
+<main id="main">
+  <p class="privacy-note" role="note">
+    <strong>Stored on this device only.</strong>
+    This static version saves lists in this browser (localStorage) and does
+    not sync across devices yet — sync is a later CloudKit / backend step.
+    No account, no ads, no analytics, no tracking.
+  </p>
+
+  <div class="view-switch" role="group" aria-label="View as">
+    <span class="view-label" id="viewLabel">Viewing as:</span>
+    <button id="ownerBtn" type="button" aria-pressed="true">Owner</button>
+    <button id="familyBtn" type="button" aria-pressed="false">Family &amp; gifters</button>
+  </div>
+  <p class="view-hint" id="viewHint">Owners add and edit gifts. Owners never see who claimed what.</p>
+
+  <!-- HOME -->
+  <section id="view-home" class="view" aria-labelledby="homeHeading">
+    <h2 id="homeHeading">Family lists</h2>
+    <div id="listGrid" class="list-grid"></div>
+    <div id="homeEmpty" class="empty" hidden>
+      <p>No lists yet.</p>
+      <button type="button" class="btn primary" data-action="new-list">Create your first list</button>
+    </div>
+    <div class="home-actions">
+      <button type="button" class="btn primary" data-action="new-list">+ New list</button>
+      <button type="button" class="btn" data-action="go-santa">Secret Santa</button>
+      <button type="button" class="btn" data-action="go-giving">My giving</button>
+    </div>
+    <details class="about">
+      <summary>How Kindred Lists works</summary>
+      <ol>
+        <li>Make a list for each person — paste a link from any store.</li>
+        <li>Share one link. Family opens it in a browser. No app, no account.</li>
+        <li>Gifters reserve under their name. The owner never sees who claimed what, and other gifters see it is taken.</li>
+        <li>Secret Santa draws respect keep-apart rules, never pair someone with themself, and never repeat last year&rsquo;s pair.</li>
+      </ol>
+    </details>
+  </section>
+
+  <!-- LIST DETAIL -->
+  <section id="view-list" class="view" aria-labelledby="listHeading" hidden>
+    <h2 id="listHeading"></h2>
+    <p id="listMeta" class="meta"></p>
+    <div class="budget" aria-label="Budget progress">
+      <div class="budget-row"><span id="budgetText"></span><span id="budgetPct"></span></div>
+      <div class="budget-bar" role="progressbar" aria-label="Budget claimed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="budgetBar"><span id="budgetFill"></span></div>
+    </div>
+    <div id="itemList" class="item-list"></div>
+    <div id="listEmpty" class="empty" hidden>
+      <p>No gifts on this list yet.</p>
+      <button type="button" class="btn primary" data-action="add-gift">Add your first gift</button>
+    </div>
+    <div class="row-actions">
+      <button type="button" class="btn primary" data-action="add-gift" id="addGiftBtn">+ Add a gift</button>
+      <button type="button" class="btn" data-action="share-list" id="shareBtn">Share this list</button>
+      <button type="button" class="btn danger" data-action="delete-list" id="deleteListBtn">Delete list</button>
+    </div>
+    <p id="shareNote" class="share-note" role="status" hidden></p>
+
+    <form id="giftForm" class="card-form" hidden aria-labelledby="giftFormHeading">
+      <h3 id="giftFormHeading">Add a gift</h3>
+      <label>Gift name
+        <input id="giftName" type="text" required autocomplete="off" placeholder="e.g. Kindle Paperwhite" />
+      </label>
+      <label>Link (any store)
+        <input id="giftLink" type="url" inputmode="url" placeholder="https://…" />
+      </label>
+      <label>Price ($)
+        <input id="giftPrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" />
+      </label>
+      <label>Size / details
+        <input id="giftDetails" type="text" autocomplete="off" placeholder="e.g. 16GB, Agave Green" />
+      </label>
+      <label>How much wanted?
+        <select id="giftWanted">
+          <option value="3">Really want it</option>
+          <option value="2" selected>Would love it</option>
+          <option value="1">Nice to have</option>
+        </select>
+      </label>
+      <label class="check"><input id="giftFamilyOnly" type="checkbox" /> Family only — hide this gift from co-workers / others</label>
+      <div class="row-actions">
+        <button type="submit" class="btn primary">Save gift</button>
+        <button type="button" class="btn" data-action="cancel-gift">Cancel</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- NEW LIST -->
+  <section id="view-new-list" class="view" aria-labelledby="newListHeading" hidden>
+    <h2 id="newListHeading">New list</h2>
+    <form id="listForm" class="card-form">
+      <label>Person&rsquo;s name
+        <input id="listPerson" type="text" required autocomplete="off" placeholder="e.g. Alex" />
+      </label>
+      <label>Occasion
+        <input id="listOccasion" type="text" autocomplete="off" placeholder="e.g. Christmas 2026" />
+      </label>
+      <label>Budget per person ($)
+        <input id="listBudget" type="number" min="0" step="1" inputmode="decimal" placeholder="150" />
+      </label>
+      <label class="check"><input id="listIsChild" type="checkbox" /> This is a child&rsquo;s list, kept by a parent</label>
+      <label>Managed by (for a child&rsquo;s list)
+        <input id="listManagedBy" type="text" autocomplete="off" placeholder="e.g. Alex &amp; Kevin" />
+      </label>
+      <div class="row-actions">
+        <button type="submit" class="btn primary">Create list</button>
+        <button type="button" class="btn" data-action="cancel-new-list">Cancel</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- SECRET SANTA -->
+  <section id="view-santa" class="view" aria-labelledby="santaHeading" hidden>
+    <h2 id="santaHeading">Secret Santa</h2>
+    <p class="meta">Draws respect keep-apart rules, never pair someone with themself, and never repeat last year&rsquo;s pair. Matches stay hidden until each person taps to reveal their own.</p>
+    <form id="santaForm" class="card-form">
+      <label>Participants (one per line)
+        <textarea id="santaPeople" rows="5" aria-describedby="santaPeopleHint"></textarea>
+      </label>
+      <p id="santaPeopleHint" class="hint">Example: Alex, Kevin, Emma, Mark — one name per line.</p>
+      <label>Keep apart (one pair per line, e.g. Alex, Kevin)
+        <textarea id="santaExclusions" rows="3" placeholder="Alex, Kevin"></textarea>
+      </label>
+      <label>Last year&rsquo;s pairs (one per line, e.g. Kevin -&gt; Emma)
+        <textarea id="santaLastYear" rows="3" placeholder="Kevin -&gt; Emma"></textarea>
+      </label>
+      <div class="row-actions">
+        <button type="submit" class="btn primary">Draw names</button>
+        <button type="button" class="btn danger" data-action="clear-santa">Clear draw</button>
+      </div>
+    </form>
+    <p id="santaStatus" role="status" class="status"></p>
+    <ul id="santaResults" class="santa-results"></ul>
+  </section>
+
+  <!-- MY GIVING -->
+  <section id="view-giving" class="view" aria-labelledby="givingHeading" hidden>
+    <h2 id="givingHeading">My giving</h2>
+    <p class="meta" id="givingTotals" role="status"></p>
+    <div id="givingList" class="item-list"></div>
+    <div id="givingEmpty" class="empty" hidden>
+      <p>Nothing reserved yet.</p>
+      <p>Switch to <strong>Family &amp; gifters</strong>, open a list, and reserve a gift under your name.</p>
+    </div>
+  </section>
+
+  <footer class="app-footer">
+    <button type="button" class="btn danger" data-action="reset-demo">Reset demo data</button>
+    <p>Kindred Lists — Privacy · Ease · Accessibility. No account. No ads. No tracking.</p>
+  </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
